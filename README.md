@@ -49,19 +49,24 @@ library from a CDN.
 Yes — and here's how to trust it instead of taking our word for it:
 
 - The algorithm is **POS (Wang et al. 2017)**, a peer-reviewed, widely-used rPPG method.
-- The signal core is **Node-validated**: on a synthetic 72 bpm signal with realistic noise it
-  recovers a stable ~72 bpm (`node rppg.test.js` → `PASS`).
+- The signal core is **Node-validated and CI-tested on every push**: on a synthetic 72 bpm signal
+  with realistic noise it recovers a stable ~72 bpm — and stays correct at 24/20/15 fps, not just 30
+  (`node rppg.test.js` → `PASS`).
 - **Verify it yourself:** take your pulse at your wrist or neck for 15 seconds and compare. It
   should land close.
 
-**Honest limits:**
+**Known limitations:**
 
-- It's sensitive to **motion and lighting**. Moving, talking, or uneven/flickering light will
-  degrade the reading — the UI tells you when to hold still or when signal is low.
+- It's sensitive to **motion and lighting**. Moving, talking, or uneven/flickering light degrades
+  the reading — the UI tells you to hold still or when signal is low, and **discards motion-contaminated
+  frames** rather than letting them corrupt the BPM.
+- **Frame rate matters.** Browser face-tracking often runs below 30 fps; PulseCanvas measures the
+  *actual* rate so the BPM stays correct, but accuracy degrades a little at very low fps.
 - This is a **demo, not a medical device.** Don't use it for any health decision.
-- We do **not** claim to show a "pulse wave traveling across your face." That signal is below
-  webcam SNR. PulseCanvas robustly shows the *amplitude* of the pulse and its perfusion map —
-  not wave propagation. We'd rather under-claim and be right.
+- We do **not** claim a "pulse wave traveling across your face." That signal is below webcam SNR;
+  PulseCanvas robustly shows the pulse *amplitude* and its perfusion map, not wave propagation.
+- **Third-party dependency:** face tracking uses MediaPipe FaceMesh from a **pinned (immutable)** CDN
+  version. For a stricter setup, self-host those two files — the rPPG code itself sends nothing.
 
 ## Files
 
