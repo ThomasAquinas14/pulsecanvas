@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PulseCanvas — see your heartbeat, live, in your browser</title>
+<meta name="description" content="See your heartbeat live in your browser — remote photoplethysmography (rPPG), 100% local. The video never leaves your device.">
+<meta property="og:title" content="PulseCanvas — see your heartbeat in your browser">
+<meta property="og:description" content="Your webcam can see your heartbeat. Live rPPG, 100% local — nothing leaves your device.">
+<meta property="og:image" content="https://thomasaquinas14.github.io/pulsecanvas/og.png">
+<meta property="og:url" content="https://thomasaquinas14.github.io/pulsecanvas/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PulseCanvas — see your heartbeat in your browser">
+<meta name="twitter:description" content="Your webcam can see your heartbeat. Live rPPG, 100% local.">
+<meta name="twitter:image" content="https://thomasaquinas14.github.io/pulsecanvas/og.png">
+<style>
+  :root{
+    --ink:#eef0f7; --dim:#8a8ca6; --accent:#ff3b6b; --accent2:#ff7aa0; color-scheme:dark;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:var(--ink);
+       font:15px/1.5 -apple-system,Segoe UI,Roboto,system-ui,sans-serif;
+       background:
+         radial-gradient(820px 460px at 50% -6%, rgba(255,59,107,.16), transparent 60%),
+         radial-gradient(720px 520px at 88% 6%, rgba(70,92,168,.13), transparent 55%),
+         radial-gradient(640px 520px at 6% 32%, rgba(124,64,148,.10), transparent 55%),
+         #06060b;
+       display:flex;flex-direction:column;align-items:center;padding:30px 16px 66px}
+  .app{width:100%;max-width:880px}
+  header{text-align:center;margin-bottom:26px}
+  h1{margin:0;font-size:40px;font-weight:800;letter-spacing:-.045em;line-height:1.04;
+     background:linear-gradient(94deg,#fff 28%,#ffb3c8 78%,#ff8fb0);
+     -webkit-background-clip:text;background-clip:text;color:transparent;
+     filter:drop-shadow(0 4px 26px rgba(255,59,107,.28))}
+  .tag{color:var(--ink);opacity:.8;margin:10px 0 0;font-size:16px}
+  .badge{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:12px;font-weight:500;
+         color:#a8e9c2;border:1px solid #1f4d34;background:linear-gradient(180deg,#10241a,#0c1b13);
+         border-radius:999px;padding:5px 13px;letter-spacing:.01em;box-shadow:0 2px 14px #0006}
+
+  /* premium card base */
+  .stage,.panel,.wave-card{
+    background:linear-gradient(180deg,#13141e,#0d0e16);border:1px solid #20222e;border-radius:18px;
+    box-shadow:0 24px 60px -28px #000, 0 2px 0 #ffffff08 inset, 0 0 0 1px #ffffff05 inset}
+
+  .row{display:flex;gap:16px;align-items:stretch}
+  .stage{position:relative;flex:1 1 auto;aspect-ratio:4/3;overflow:hidden}
+  #view{position:absolute;inset:0;width:100%;height:100%}
+  .chip{position:absolute;left:14px;top:13px;font-size:12px;font-weight:600;color:var(--ink);
+        background:rgba(8,8,14,.6);backdrop-filter:blur(8px);border:1px solid #ffffff1a;
+        border-radius:999px;padding:6px 13px;box-shadow:0 4px 16px #0007}
+  .enable{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+        display:flex;flex-direction:column;align-items:center;gap:6px;padding:22px 30px;
+        border:1px solid #ffffff1f;border-radius:16px;background:rgba(12,12,20,.5);backdrop-filter:blur(10px);
+        color:var(--ink);cursor:pointer;font:inherit;text-align:center;
+        box-shadow:0 14px 44px #0009;transition:transform .15s ease,box-shadow .2s,border-color .2s}
+  .enable:hover{transform:translate(-50%,-50%) scale(1.035);border-color:#ff3b6b66;box-shadow:0 18px 52px #ff3b6b2e}
+  .enable-ic{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;font-size:17px;
+        background:linear-gradient(95deg,var(--accent),#ff6a8d);color:#fff;box-shadow:0 8px 22px #ff3b6b55;
+        margin-bottom:4px;padding-left:3px}
+  .enable-t{font-size:15px;font-weight:700}
+  .enable-s{font-size:11.5px;color:var(--dim)}
+  .enable.hide{display:none}
+
+  .panel{flex:0 0 200px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+         gap:8px;padding:26px 18px;position:relative;overflow:hidden}
+  .panel::before{content:"";position:absolute;top:6%;left:50%;width:210px;height:210px;
+         background:radial-gradient(circle,rgba(255,59,107,.16),transparent 68%);pointer-events:none;
+         transform:translateX(-50%);animation:halo 2.6s ease-in-out infinite}
+  @keyframes halo{0%,100%{opacity:.6;transform:translateX(-50%) scale(.9)}
+                  50%{opacity:1;transform:translateX(-50%) scale(1.06)}}
+  .heart{font-size:58px;color:var(--accent);line-height:1;position:relative;
+         filter:drop-shadow(0 0 18px #ff3b6baa);transform:scale(1);will-change:transform,filter}
+  .heart::after{content:"";position:absolute;inset:-10px;border-radius:50%;border:2.5px solid #ff5c83;
+         opacity:0;pointer-events:none}
+  .heart.beat::after{animation:ring .62s ease-out}
+  @keyframes ring{0%{opacity:.75;transform:scale(.55)}100%{opacity:0;transform:scale(2.1)}}
+  .bpm{display:flex;align-items:baseline;gap:7px;margin-top:4px;position:relative}
+  #bpm{font-size:58px;font-weight:800;letter-spacing:-.05em;font-variant-numeric:tabular-nums;
+       background:linear-gradient(180deg,#fff,#ffc2d2);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .bpm b{color:var(--dim);font-weight:700;font-size:14px;letter-spacing:.1em}
+  .q-label,.spark-label,.wave-label{color:#6c6e86;letter-spacing:.18em;text-transform:uppercase}
+  .q-label{font-size:10px;margin-top:12px}
+  .q-track{width:142px;height:7px;background:#191b27;border-radius:99px;overflow:hidden;box-shadow:0 0 0 1px #ffffff08 inset}
+  .q-fill{height:100%;width:0;background:linear-gradient(90deg,#ff5c83,#ffb37a,#7affc0);
+          box-shadow:0 0 12px #ff5c8388;transition:width .25s}
+  #spark{display:block;margin-top:16px;width:152px;height:32px;opacity:.95}
+  .spark-label{font-size:9px;margin-top:4px}
+  .diag{margin-top:16px;color:#52546a;font:12px ui-monospace,SFMono-Regular,monospace;text-align:center;letter-spacing:.04em}
+  .controls{display:flex;justify-content:center;margin-top:18px}
+  #record{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;font-size:13px;font-weight:650;
+          border:1px solid #ff3b6b55;background:linear-gradient(180deg,#1c0e15,#150b10);color:#ff86a8;
+          border-radius:11px;cursor:pointer;transition:transform .12s,box-shadow .2s,color .2s}
+  #record:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 8px 22px #ff3b6b3a;color:#ffa6c0}
+  #record:disabled{opacity:.4;cursor:default}
+  #record.rec{background:linear-gradient(180deg,#ff3b6b,#e23161);color:#fff;border-color:#ff3b6b;box-shadow:0 8px 24px #ff3b6b66}
+  .note{margin-top:14px;text-align:center;font-size:12.5px;color:#ffd0a8;
+        border:1px solid #5a3b1f;background:linear-gradient(180deg,#20150b,#180f08);border-radius:11px;padding:9px 13px;display:none}
+  .note.show{display:block}
+  .wave-card{margin-top:16px;padding:14px 16px}
+  .wave-label{font-size:10.5px;margin-bottom:8px}
+  #wave{display:block;width:100%;height:124px}
+  footer{margin:30px auto 0;max-width:540px;color:#62647c;text-align:center;font-size:13px;line-height:1.68}
+  footer p{margin:0 0 11px}
+  footer p:last-child{margin-bottom:0}
+  video{display:none}
+  @media(max-width:680px){
+    body{padding:20px 12px 48px}
+    h1{font-size:27px}
+    .row{flex-direction:column}
+    .panel{flex-basis:auto;flex-direction:row;flex-wrap:wrap;justify-content:space-around;gap:10px}
+    .panel::before{display:none}
+    #bpm{font-size:46px}.heart{font-size:44px}
+    #start{width:156px}
+  }
+  @media(max-width:420px){.panel{gap:6px}#spark{width:120px}}
+</style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>PulseCanvas</h1>
+      <p class="tag">Your webcam can see your heartbeat.</p>
+      <span class="badge">● 100% local — nothing leaves your device</span>
+    </header>
+
+    <div class="row">
+      <div class="stage">
+        <canvas id="view"></canvas>
+        <div class="chip" id="status">ready</div>
+        <button class="enable" id="enable">
+          <span class="enable-ic">▶</span>
+          <span class="enable-t">Enable camera</span>
+          <span class="enable-s">100% local — nothing leaves your device</span>
+        </button>
+      </div>
+      <aside class="panel">
+        <div class="heart" id="heart">&#10084;</div>
+        <div class="bpm"><span id="bpm">--</span><b>BPM</b></div>
+        <div class="q-label">signal</div>
+        <div class="q-track"><div class="q-fill" id="quality"></div></div>
+        <canvas id="spark" width="150" height="34"></canvas>
+        <div class="spark-label">last 60s</div>
+      </aside>
+    </div>
+
+    <div class="note" id="note"></div>
+
+    <div class="wave-card">
+      <div class="wave-label">blood-volume pulse — live</div>
+      <canvas id="wave"></canvas>
+    </div>
+
+    <div class="controls"><button id="record" disabled>● Record 12s clip</button></div>
+
+    <footer>
+      <p>Each heartbeat changes your skin color by a fraction of a percent — remote
+         photoplethysmography (POS, Wang et&nbsp;al. 2017). PulseCanvas reads it across your
+         face and renders it live.</p>
+      <p>Hold still in even light; the reading locks in after ~10–15&nbsp;s.
+         Cross-check it against your wrist.</p>
+    </footer>
+  </div>
+
+  <!-- MediaPipe pinned to exact, immutable versions (a changed CDN script runs in-page after camera
+       permission, so we don't track "latest"). For maximum hardening, self-host these two files. -->
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"></script>
+  <script src="rppg.js"></script>
+  <script src="heatmap.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

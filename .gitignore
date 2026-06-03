@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Dev-only tooling (NOT part of the shipped static site)
+package.json
+package-lock.json
+_*.html
+_*.js
+*_preview.png
+debug_spec.js
+probe_rppg.py
+
+# Recordings produced by the app at runtime
+*.webm
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.log
