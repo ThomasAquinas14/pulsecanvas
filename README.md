@@ -2,6 +2,11 @@
 
 **Your webcam can see your heartbeat — live, in your browser, 100% local.**
 
+### ▶ [Try it live: thomasaquinas14.github.io/pulsecanvas](https://thomasaquinas14.github.io/pulsecanvas/)
+
+No install, no upload — open the link in Chrome/Edge, click **Start camera**, and watch your
+own pulse appear. Best on a desktop with a webcam, in even lighting.
+
 PulseCanvas reads the tiny color changes your pulse pushes through your skin and turns them
 into a live BPM, a blood-volume-pulse waveform, a beating heart, and a face heatmap that
 glows in time with each beat. No app, no upload, no server — the video never leaves your tab.
@@ -10,7 +15,9 @@ It uses **remote photoplethysmography (rPPG)**: every heartbeat shifts the color
 by a fraction of a percent. A camera can pick that up. PulseCanvas extracts it with the
 **POS algorithm** (Plane-Orthogonal-to-Skin, Wang et al. 2017).
 
-## Run it
+## Run it locally
+
+(The [live demo](https://thomasaquinas14.github.io/pulsecanvas/) is the easiest way to try it — this is for hacking on the code.)
 
 It needs a **secure context** (the camera API only works on `localhost` or `https`), so serve
 the folder — don't just open the file.
