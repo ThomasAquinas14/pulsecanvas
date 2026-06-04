@@ -59,8 +59,8 @@ Yes — and here's how to trust it instead of taking our word for it:
 - The signal core is **Node-validated and CI-tested on every push**. On synthetic rPPG signals with
   realistic camera noise, lighting drift and slow motion, it recovers the correct rate **across the
   whole 50–150 bpm band, at 30/24/20/15 fps, over multiple random seeds** — not one rate at one seed
-  (`node rppg.test.js` → `PASS`). The same test prints where accuracy falls off (dim light / high
-  rate), so the limitations below are *measured*, not guessed.
+  (`node rppg.test.js` → `PASS`). A companion script `node rppg.lowsnr.js` prints where accuracy
+  falls off (dim light / high rate), so the limitations below are *measured*, not guessed.
 - **Verify it yourself:** take your pulse at your wrist or neck for 15 seconds and compare. It
   should land close.
 
