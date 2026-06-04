@@ -31,14 +31,23 @@ function posWindow(win) {
 
 // Overlap-add POS over a whole rolling buffer -> one continuous, normalized pulse signal.
 // This is what probe_rppg.py validated (H[n:n+win] += h - mean(h)), NOT a per-frame last sample.
+//
+// WEIGHTED overlap-add: each window's contribution is tapered by a Hann window and we divide by the
+// summed weights (WOLA). A naive rectangular overlap-add of mean-subtracted segments leaves a
+// hard discontinuity at every window edge; those edges beat against the hop to plant a spurious
+// spectral bump near ~2/windowSec (≈75 bpm for a 1.6 s window) that sits right in the pulse band and,
+// at low frame rates, can out-vote the real peak for ANY true heart rate. Tapering removes it.
 function posOverlapAdd(rgbBuf, win) {
   const L = rgbBuf.length;
   const H = new Array(L).fill(0);
   if (L < win) return H;
+  const wnd = new Array(win), wsum = new Array(L).fill(0);
+  for (let i = 0; i < win; i++) wnd[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (win - 1));
   for (let n = 0; n <= L - win; n++) {
     const h = posWindow(rgbBuf.slice(n, n + win));
-    for (let i = 0; i < win; i++) H[n + i] += h[i];
+    for (let i = 0; i < win; i++) { H[n + i] += h[i] * wnd[i]; wsum[n + i] += wnd[i]; }
   }
+  for (let i = 0; i < L; i++) if (wsum[i] > 1e-9) H[i] /= wsum[i];
   const m = mean(H), s = std(H) + 1e-9;
   for (let i = 0; i < L; i++) H[i] = (H[i] - m) / s;
   return H;
@@ -46,17 +55,28 @@ function posOverlapAdd(rgbBuf, win) {
 
 class PulseSignal {
   constructor(fps = 30, windowSec = 1.6, bufSec = 11) {
-    this.fps = fps;
-    this.win = Math.max(12, Math.round(fps * windowSec));
-    this.bufLen = Math.round(fps * bufSec);
+    this.windowSec = windowSec; this.bufSec = bufSec;
     this.buffers = new Map();   // regionId -> array of [r,g,b]
     this.pulses = new Map();    // regionId -> continuous pulse array (latest recompute)
     this.combined = [];         // mean pulse across regions, for the BPM FFT
     this._frame = 0;
-    this._recomputeEvery = Math.max(1, Math.round(fps / 10));   // refresh pulses ~10x/sec
-    this._bpmEvery = Math.max(1, Math.round(fps * 0.4));        // refresh BPM ~2.5x/sec
     this._hist = []; this._cachedBpm = null; this._conf = 0;
     this._prevV = null; this._lastBeatFrame = -999; this._beats = []; this._beatFlag = false;
+    this.setFps(fps);           // sets fps + ALL fps-derived constants (win, bufLen, cadences)
+  }
+
+  // Update the frame rate AND everything derived from it. The browser app can't know the true rate up
+  // front (FaceMesh runs below 30fps and varies), so it measures and calls this each frame. Mutating a
+  // bare `fps` field is NOT enough: win/bufLen/_recomputeEvery/_bpmEvery are all functions of fps, and
+  // a stale `win` (e.g. 48 from an assumed 30fps while really at 15fps) makes the POS window cover the
+  // wrong span and the BPM scale by assumedFps/actualFps. (Cheap; safe to call every frame.)
+  setFps(fps) {
+    if (!(fps > 0)) return;
+    this.fps = fps;
+    this.win = Math.max(12, Math.round(fps * this.windowSec));
+    this.bufLen = Math.round(fps * this.bufSec);
+    this._recomputeEvery = Math.max(1, Math.round(fps / 10));   // refresh pulses ~10x/sec
+    this._bpmEvery = Math.max(1, Math.round(fps * 0.4));        // refresh BPM ~2.5x/sec
   }
 
   push(regionId, r, g, b) {
@@ -147,15 +167,35 @@ class PulseSignal {
     return best;
   }
 
-  // High-pass detrend: subtract a ~1.2s moving average (steeper than 2s) to kill lighting/motion
-  // drift below ~0.8 Hz that was leaking in as a false ~45 bpm peak, while keeping the pulse band.
+  // Is `bpm` a genuine local spectral maximum (a real peak), not just incidental shoulder/drift power?
+  // Compares the power AT bpm to the power in the shoulders ~6 bpm out on each side.
+  _isLocalPeak(bpm) {
+    if (!this._spec) return false;
+    const at = this._powerAt(bpm);
+    let shoulder = 0;
+    for (const s of this._spec) {
+      const d = Math.abs(s[0] - bpm);
+      if (d >= 5 && d <= 8 && s[1] > shoulder) shoulder = s[1];
+    }
+    return at > shoulder * 1.15;
+  }
+
+  // High-pass detrend: subtract a GAUSSIAN-smoothed copy (a clean low-pass) to kill lighting/motion
+  // drift below ~0.6 Hz while keeping the whole 46-180 bpm pulse band. A boxcar moving-average has
+  // spectral sidelobes that plant spurious in-band peaks (and a hard cutoff that eats true ~50 bpm);
+  // a Gaussian kernel has no sidelobes, so the residual is a ripple-free high-pass. sigma ~0.5 s puts
+  // the −3 dB corner near 0.6 Hz (~36 bpm): drift dies, true rates from 46 up survive intact.
   _detrend(x) {
-    const k = Math.round(this.fps * 0.6);
-    const out = new Array(x.length);
-    for (let i = 0; i < x.length; i++) {
-      const a = Math.max(0, i - k), b = Math.min(x.length - 1, i + k);
-      let s = 0; for (let j = a; j <= b; j++) s += x[j];
-      out[i] = x[i] - s / (b - a + 1);
+    const sigma = Math.max(1, this.fps * 0.5);
+    const rad = Math.ceil(sigma * 3);
+    const ker = new Array(2 * rad + 1);
+    for (let j = -rad; j <= rad; j++) ker[j + rad] = Math.exp(-(j * j) / (2 * sigma * sigma));
+    const N = x.length, out = new Array(N);
+    for (let i = 0; i < N; i++) {
+      let s = 0, wsum = 0;
+      const a = Math.max(0, i - rad), b = Math.min(N - 1, i + rad);
+      for (let j = a; j <= b; j++) { const w = ker[j - i + rad]; s += x[j] * w; wsum += w; }
+      out[i] = x[i] - s / (wsum || 1);
     }
     return out;
   }
@@ -185,6 +225,18 @@ class PulseSignal {
     this._spec = spec; this._total = total;
     this._conf = peakP / (total + 1e-9);
 
+    // CONFIDENCE GATE: when no single frequency clearly dominates the band (a flat, noisy spectrum),
+    // this cycle's "peak" is just the tallest noise bin — folding it into the median would drag the
+    // estimate toward a wrong rate. So skip the update: hold the existing lock if we have one, or
+    // withhold a number entirely until real signal returns (better an honest "locking…" than a
+    // confident wrong BPM). The band has 135 one-bpm bins, so pure noise sits near 1/135 ≈ 0.007;
+    // MIN_CONF is several times that floor, and matches the app's existing "low signal" UI cutoff.
+    const MIN_CONF = 0.05;
+    if (this._conf < MIN_CONF) {
+      this._cachedBpm = (this._disp != null) ? Math.round(this._disp) : null;
+      return this._cachedBpm;
+    }
+
     // Robust estimate: MEDIAN of recent per-recompute spectral peaks (~6s @ 2.5 Hz). The dominant
     // pulse frequency wins; transient noise peaks are outvoted. No EMA seed-lock, no freeze.
     // continuity bias: once locked, prefer the spectral peak NEAR the current estimate; jump to a
@@ -196,10 +248,12 @@ class PulseSignal {
       if (lb && peakP < lp * 1.6) chosen = lb;
     }
     // octave correction: a pulse's 2nd harmonic can dominate early -> prefer the fundamental if it
-    // also has strong power. Stops the "starts at 120, settles to 60" transient.
+    // also has strong power. Stops the "starts at 120, settles to 60" transient. ONLY fold down when
+    // the half-rate is a GENUINE local peak of comparable strength (a real fundamental we missed) —
+    // otherwise a true high heart rate (120/150) gets wrongly halved by incidental drift power at f/2.
     if (chosen > 90) {
       const half = Math.round(chosen / 2);
-      if (half >= 46 && this._powerAt(half) > 0.5 * this._powerAt(chosen)) chosen = half;
+      if (half >= 46 && this._isLocalPeak(half) && this._powerAt(half) > 0.85 * this._powerAt(chosen)) chosen = half;
     }
     this._hist.push(chosen);
     if (this._hist.length > 25) this._hist.shift();

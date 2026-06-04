@@ -162,10 +162,18 @@
     </footer>
   </div>
 
-  <!-- MediaPipe pinned to exact, immutable versions (a changed CDN script runs in-page after camera
-       permission, so we don't track "latest"). For maximum hardening, self-host these two files. -->
-  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
-  <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"></script>
+  <!-- MediaPipe pinned to exact, immutable versions AND locked with Subresource Integrity: the browser
+       refuses to run either file unless its bytes hash to exactly these sha384 digests, so a tampered
+       or swapped CDN response (these scripts run in-page after camera permission) simply won't execute
+       — the app then reports "couldn't load the face tracker" instead of running unknown code. The
+       runtime wasm/data assets loaded via locateFile still can't carry SRI; self-hosting remains the
+       only way to remove the CDN from the trust boundary entirely. -->
+  <script crossorigin="anonymous"
+          integrity="sha384-q1KhAZhJcJXr3zfC3Tz07pBqQSabwFIZhXlmlUAB8s0zk4ETWERkIKGBCFQ5Jc3e"
+          src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"></script>
+  <script crossorigin="anonymous"
+          integrity="sha384-nKiz5QrpRlMQLw5nrZcprT7N9vmmAcIgV8TuGuep4x91V4JIPsXa+D44Wxj0guoa"
+          src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js"></script>
   <script src="rppg.js"></script>
   <script src="heatmap.js"></script>
   <script src="app.js"></script>

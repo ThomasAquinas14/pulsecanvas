@@ -31,6 +31,10 @@ function showNote(msg) { if (noteEl) { noteEl.textContent = msg; noteEl.classLis
 // MediaRecorder feature-detect: if missing, disable Record with an explanatory tooltip.
 const recordSupported = (typeof MediaRecorder !== 'undefined') &&
   (typeof HTMLCanvasElement !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function');
+// Persistent latch: feature-detection (recordSupported) can pass in a browser that still throws when
+// MediaRecorder is actually constructed. recFail() clears this for good, so the live BPM loop (which
+// re-enables the button) can never resurrect a button we've proven broken at runtime.
+let recordAvailable = recordSupported;
 
 // diagnostic line: the estimator's top spectral candidates (so you can see what it's choosing)
 const diag = document.createElement('div');
@@ -120,7 +124,7 @@ function drawSpark(bpm) {
 }
 
 function recReset() { recording = false; recordBtn.classList.remove('rec'); recordBtn.textContent = '● Record 12s clip'; }
-function recFail() { recReset(); recordBtn.disabled = true; recordBtn.title = 'Recording is not available in this browser'; recordBtn.textContent = 'recording unavailable'; }
+function recFail() { recordAvailable = false; recReset(); recordBtn.disabled = true; recordBtn.title = 'Recording is not available in this browser'; recordBtn.textContent = 'recording unavailable'; }
 
 function startRecording() {
   if (recording || !view.width) return;
@@ -172,7 +176,7 @@ function onResults(res) {
   if (lastFrameT) {
     const inst = 1000 / Math.max(1, now - lastFrameT);
     measFps = measFps * 0.9 + Math.min(60, Math.max(5, inst)) * 0.1;
-    ps.fps = measFps;
+    ps.setFps(measFps);   // recomputes win/bufLen/cadences too — a bare ps.fps = ... would leave them stale
   }
   lastFrameT = now;
 
@@ -233,7 +237,7 @@ function onResults(res) {
     statusEl.textContent = '○ hold still';
   } else if (bpm) {
     statusEl.textContent = q > 0.045 ? '● live' : '○ low signal — even light';
-    if (recordSupported && recordBtn.disabled && !recording) recordBtn.disabled = false;
+    if (recordAvailable && recordBtn.disabled && !recording) recordBtn.disabled = false;
   } else {
     statusEl.textContent = `locking… ${Math.round(ps.lockProgress() * 100)}%`;
   }
